@@ -33,14 +33,17 @@ end
 
 class Unit
   def self.get_data
-    mac = `cat /sys/class/net/eth0/address | tr -d "\n"`
-    hostname = `curl -s -u karma:admin #{APIURL}/units/data/#{mac} | tr -d '"'`
-    File.open( '/etc/hostname', 'w') do |file|
-      file.write("#{hostname}")
+    hostname = `hostname | tr -d "\n"`
+    if hostname == 'stuga'
+      mac = `cat /sys/class/net/eth0/address | tr -d "\n"`
+      hostname = `curl -s -u karma:admin #{APIURL}/units/data/#{mac} | tr -d '"'`
+      File.open( '/etc/hostname', 'w') do |file|
+        file.write("#{hostname}")
+      end
+      `hostname #{hostname}`
+      $no_rooms = `curl -s -u karma:admin #{APIURL}/units/rooms/#{mac} | tr -d '"'`
+      $no_rooms = $no_rooms.to_i
     end
-    `hostname #{hostname}`
-    $no_rooms = `curl -s -u karma:admin #{APIURL}/units/rooms/#{mac} | tr -d '"'`
-    $no_rooms = $no_rooms.to_i
   end
 
   def self.report
@@ -56,7 +59,7 @@ class Unit
     `curl -s -H 'Content-Type: application/json' -u karma:admin -d '#{payload}' #{APIURL}/units`
    
     unless hostname == "stuga"
-    $no_rooms = `curl -s -u karma:admin #{APIURL}/units/rooms/#{mac} | tr -d '"'`
+      $no_rooms = `curl -s -u karma:admin #{APIURL}/units/rooms/#{mac} | tr -d '"'`
       i = 1
       while i <= $no_rooms do 
         relay_status = eval "RELAY_ROOM#{i}.read"
