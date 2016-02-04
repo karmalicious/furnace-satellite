@@ -33,23 +33,22 @@ end
 
 class Unit
   def self.get_data
-    hostname = `hostname | tr -d "\n"`
-    if hostname == 'stuga'
-      mac = `cat /sys/class/net/eth0/address | tr -d "\n"`
-      hostname = `curl -s -u karma:admin #{APIURL}/units/data/#{mac} | tr -d '"'`
+    hostname_local = `hostname | tr -d "\n"`
+    mac = `cat /sys/class/net/eth0/address | tr -d "\n"`
+    hostname_db = `curl -s -u karma:admin #{APIURL}/units/data/#{mac} | tr -d '"'`
+    unless hostname_db == hostname_local
       File.open( '/etc/hostname', 'w') do |file|
         file.write("#{hostname}")
       end
       `hostname #{hostname}`
-      $no_rooms = `curl -s -u karma:admin #{APIURL}/units/rooms/#{mac} | tr -d '"'`
-      $no_rooms = $no_rooms.to_i
     end
   end
 
   def self.report
     mac = `cat /sys/class/net/eth0/address | tr -d "\n"`
     ip = `hostname -I | tr -d " \n"`
-    hostname = `hostname | tr -d "\n"`
+    hostname_local = `hostname | tr -d "\n"`
+    hostname_db = `curl -s -u karma:admin #{APIURL}/units/data/#{mac} | tr -d '"'`
   
     payload = {
       "ip" => "#{ip}",
@@ -58,7 +57,7 @@ class Unit
     }.to_json
     `curl -s -H 'Content-Type: application/json' -u karma:admin -d '#{payload}' #{APIURL}/units`
    
-    unless hostname == "stuga"
+    unless hostname_local == hostname_db
       $no_rooms = `curl -s -u karma:admin #{APIURL}/units/rooms/#{mac} | tr -d '"'`
       i = 1
       while i <= $no_rooms do 
