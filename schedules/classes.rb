@@ -1,32 +1,33 @@
 class Schedule
   def self.read
     hostname = `hostname | tr -d "\n"`
-    unless hostname == "stuga"
-      schedule = `curl -s -u karma:admin #{APIURL}/schedules/unit/#{hostname}`
-      if schedule
-        File.open( '/tmp/schedule', 'w') do |file|
-          file.write("#{schedule}")
+    schedule = `curl -s -u karma:admin #{APIURL}/schedules/unit/#{hostname}`
+    if schedule
+      File.open( '/tmp/schedule', 'w') do |file|
+        file.write("#{schedule}")
+      end
+    end
+    status = "off"
+    unless File.readlines("/tmp/schedule").grep(/\[\]/).any?
+      json  = JSON.parse(File.read('/tmp/schedule'))
+      json.each do |item|
+        stop	= DateTime.parse(item['stop'])
+        start	= DateTime.parse(item['start'])
+        now	= DateTime.now
+        if now < stop && now > start
+          status = "on"
+        else
+          status = "off"
         end
       end
-      status = "off"
-      unless File.readlines("/tmp/schedule").grep(/\[\]/).any?
-        json  = JSON.parse(File.read('/tmp/schedule'))
-        json.each do |item|
-          stop	= DateTime.parse(item['stop'])
-          start	= DateTime.parse(item['start'])
-          now	= DateTime.now
-          if now < stop && now > start
-            status = "on"
-          else
-            status = "off"
-          end
-        end
-      end
-      i = 1 
-      while i <= $no_rooms do 
-        eval "RELAY_ROOM#{i}.#{status}"
-        i += 1
-      end
+    end
+    i = 1 
+    mac = `cat /sys/class/net/eth0/address | tr -d "\n"`
+    $no_rooms = `curl -s -u karma:admin #{APIURL}/units/rooms/#{mac} | tr -d '"'`
+    $no_rooms = $no_rooms.to_i
+    while i <= $no_rooms do 
+      eval "RELAY_ROOM#{i}.#{status}"
+      i += 1
     end
   end
 end
@@ -38,9 +39,9 @@ class Unit
     hostname_db = `curl -s -u karma:admin #{APIURL}/units/data/#{mac} | tr -d '"'`
     unless hostname_db == hostname_local
       File.open( '/etc/hostname', 'w') do |file|
-        file.write("#{hostname}")
+        file.write("#{hostname_db}")
       end
-      `hostname #{hostname}`
+      `hostname #{hostname_db}`
     end
   end
 
@@ -57,18 +58,19 @@ class Unit
     }.to_json
     `curl -s -H 'Content-Type: application/json' -u karma:admin -d '#{payload}' #{APIURL}/units`
    
-    unless hostname_local == hostname_db
+    if hostname_local == hostname_db
       $no_rooms = `curl -s -u karma:admin #{APIURL}/units/rooms/#{mac} | tr -d '"'`
+      $no_rooms = $no_rooms.to_i
       i = 1
       while i <= $no_rooms do 
-        relay_status = eval "RELAY_ROOM#{i}.read"
+        relay_status = (eval "RELAY_ROOM#{i}.read")
         room = "#{i}"
         payload = {
-          "unit"		=> "#{hostname}",
+          "unit"		=> "#{hostname_local}",
           "room"		=> "#{room}",
           "relay_status"	=> "#{relay_status}"
         }.to_json
-        `curl -s -H 'Content-Type: application/json' -d '#{payload}' #{APIURL}/relay`
+        `curl -s -H 'Content-Type: application/json' -u karma:admin -d '#{payload}' #{APIURL}/relay`
         i += 1
       end
     end
