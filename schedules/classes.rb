@@ -11,23 +11,18 @@ class Schedule
     unless File.readlines("/tmp/schedule").grep(/\[\]/).any?
       json  = JSON.parse(File.read('/tmp/schedule'))
       json.each do |item|
+        room	= item['room_id']
         stop	= DateTime.parse(item['stop'])
         start	= DateTime.parse(item['start'])
         now	= DateTime.now
         if now < stop && now > start
           status = "on"
+          eval "RELAY_ROOM#{room}.#{status}"
         else
           status = "off"
+          eval "RELAY_ROOM#{room}.#{status}"
         end
       end
-    end
-    i = 1 
-    mac = `cat /sys/class/net/eth0/address | tr -d "\n"`
-    $no_rooms = `curl -s -u karma:admin #{APIURL}/units/rooms/#{mac} | tr -d '"'`
-    $no_rooms = $no_rooms.to_i
-    while i <= $no_rooms do 
-      eval "RELAY_ROOM#{i}.#{status}"
-      i += 1
     end
   end
 end
@@ -57,7 +52,6 @@ class Unit
       "version" => "1.5"
     }.to_json
     `curl -s -H 'Content-Type: application/json' -u karma:admin -d '#{payload}' #{APIURL}/units`
-   
     if hostname_local == hostname_db
       $no_rooms = `curl -s -u karma:admin #{APIURL}/units/rooms/#{mac} | tr -d '"'`
       $no_rooms = $no_rooms.to_i
@@ -68,7 +62,8 @@ class Unit
         payload = {
           "unit"		=> "#{hostname_local}",
           "room"		=> "#{room}",
-          "relay_status"	=> "#{relay_status}"
+          "relay_status"	=> "#{relay_status}",
+          "temp"		=> (rand(10...42))
         }.to_json
         `curl -s -H 'Content-Type: application/json' -u karma:admin -d '#{payload}' #{APIURL}/relay`
         i += 1
